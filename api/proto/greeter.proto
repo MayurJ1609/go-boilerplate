@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package greeter.v1;
+
+option go_package = "github.com/example/go-boilerplate/internal/transport/grpcapi";
+
+import "google/protobuf/wrappers.proto";
+
+service Greeter {
+  rpc SayHello(google.protobuf.StringValue) returns (google.protobuf.StringValue);
+}
