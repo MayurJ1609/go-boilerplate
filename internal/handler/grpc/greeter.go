@@ -1,9 +1,9 @@
-package grpcapi
+package grpc
 
 import (
 	"context"
 
-	"github.com/example/go-boilerplate/internal/service"
+	"github.com/example/go-boilerplate/internal/domain"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -75,10 +75,10 @@ var greeterServiceDesc = grpc.ServiceDesc{
 }
 
 type GreeterService struct {
-	greeter service.Greeter
+	greeter domain.Greeter
 }
 
-func NewGreeterService(greeter service.Greeter) GreeterServer {
+func NewGreeterService(greeter domain.Greeter) GreeterServer {
 	return &GreeterService{greeter: greeter}
 }
 

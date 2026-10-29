@@ -10,20 +10,22 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/example/go-boilerplate/internal/platform/dependencies"
-	"github.com/example/go-boilerplate/internal/service"
-	mongostore "github.com/example/go-boilerplate/internal/storage/mongo"
-	"github.com/example/go-boilerplate/internal/storage/postgres"
-	"github.com/example/go-boilerplate/internal/transport/rest"
+	"github.com/example/go-boilerplate/internal/config"
+	"github.com/example/go-boilerplate/internal/database"
+	"github.com/example/go-boilerplate/internal/domain"
+	"github.com/example/go-boilerplate/internal/handler/rest"
+	"github.com/example/go-boilerplate/internal/middleware"
+	mongostore "github.com/example/go-boilerplate/internal/repository/mongo"
+	postgresrepo "github.com/example/go-boilerplate/internal/repository/postgres"
 )
 
 func main() {
-	config, err := dependencies.LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("load dependency configuration: %v", err)
 	}
 	connectCtx, connectCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	clients, err := dependencies.Connect(connectCtx, config)
+	clients, err := database.Connect(connectCtx, cfg)
 	connectCancel()
 	if err != nil {
 		log.Fatalf("connect dependencies: %v", err)
@@ -39,14 +41,14 @@ func main() {
 	addr := envOrDefault("HTTP_ADDR", ":8080")
 	server := &http.Server{
 		Addr: addr,
-		Handler: rest.NewHandlerWithStores(
-			service.Greeter{},
+		Handler: middleware.Logging(rest.NewHandlerWithStores(
+			domain.Greeter{},
 			clients,
 			clients,
 			clients.Ping,
-			postgres.NewItems(clients.Postgres),
+			postgresrepo.NewItems(clients.Postgres),
 			mongostore.NewItems(clients.MongoDatabase()),
-		),
+		)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

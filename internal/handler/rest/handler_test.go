@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-boilerplate/internal/service"
+	"github.com/example/go-boilerplate/internal/domain"
 )
 
 func TestGreetEndpoint(t *testing.T) {
-	handler := NewHandler(service.Greeter{})
+	handler := NewHandler(domain.Greeter{})
 	req := httptest.NewRequest(http.MethodGet, "/v1/greet?name=Ada", nil)
 	rec := httptest.NewRecorder()
 
@@ -32,7 +32,7 @@ func TestGreetEndpoint(t *testing.T) {
 }
 
 func TestHealthEndpoint(t *testing.T) {
-	handler := NewHandler(service.Greeter{})
+	handler := NewHandler(domain.Greeter{})
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 
@@ -65,7 +65,7 @@ func TestReadinessEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandlerWithReadiness(service.Greeter{}, tt.ready)
+			handler := NewHandlerWithReadiness(domain.Greeter{}, tt.ready)
 			req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 			rec := httptest.NewRecorder()
 
@@ -109,7 +109,7 @@ func (p *testPublisher) Publish(_ context.Context, key, value []byte) error {
 func TestGreetUsesCacheAndPublishesEvent(t *testing.T) {
 	cache := &testCache{values: map[string]string{"greeting:Ada": "Hello, Ada!"}}
 	publisher := &testPublisher{}
-	handler := NewHandlerWithDependencies(service.Greeter{}, cache, publisher, func(context.Context) error { return nil })
+	handler := NewHandlerWithDependencies(domain.Greeter{}, cache, publisher, func(context.Context) error { return nil })
 	req := httptest.NewRequest(http.MethodGet, "/v1/greet?name=Ada", nil)
 	rec := httptest.NewRecorder()
 
@@ -131,7 +131,7 @@ func TestGreetUsesCacheAndPublishesEvent(t *testing.T) {
 }
 
 func TestGreetReturnsUnavailableWhenCacheFails(t *testing.T) {
-	handler := NewHandlerWithDependencies(service.Greeter{}, failingCache{}, &testPublisher{}, nil)
+	handler := NewHandlerWithDependencies(domain.Greeter{}, failingCache{}, &testPublisher{}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/v1/greet?name=Ada", nil)
 	rec := httptest.NewRecorder()
 

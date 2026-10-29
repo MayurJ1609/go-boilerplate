@@ -2,6 +2,20 @@
 
 A Go starter project with independent REST API, gRPC server, gRPC client, and cron-job entrypoints. It includes PostgreSQL, MongoDB, Redis, and Kafka clients for the REST API, gRPC server, and cron runner.
 
+## Project structure
+
+```text
+internal/
+├── config/       # Environment-based configuration
+├── database/     # PostgreSQL, MongoDB, Redis, Kafka connections and migrations
+├── domain/       # Core models, business logic, and repository interfaces
+├── handler/      # REST and gRPC transport handlers
+├── middleware/   # HTTP request logging
+└── repository/   # PostgreSQL and MongoDB persistence implementations
+```
+
+Commands under `cmd/` compose these layers into each executable.
+
 ## Requirements
 
 - Go 1.23+
@@ -29,6 +43,8 @@ make run-grpc-server
 make run-grpc-client
 make run-cron
 ```
+
+`LoadConfig` reads `.env.example` from the current working directory when present. Non-empty process environment variables take precedence; if the file is absent, built-in defaults are used.
 
 ## Debug in VS Code
 
@@ -71,7 +87,7 @@ curl -X POST http://localhost:8080/v1/mongo/items \
   -d '{"name":"example","description":"stored in MongoDB"}'
 ```
 
-The PostgreSQL table is created by the versioned SQL migration [`0001_create_items.sql`](internal/platform/migrations/migrations/0001_create_items.sql), applied automatically at service startup and recorded in `schema_migrations`. MongoDB uses the `items` collection in `MONGODB_DATABASE`, created during startup if it does not exist. New PostgreSQL migrations should be added as lexically ordered SQL files under `internal/platform/migrations/migrations/`.
+The PostgreSQL table is created by the versioned SQL migration [`0001_create_items.sql`](internal/database/migrations/sql/0001_create_items.sql), applied automatically at service startup and recorded in `schema_migrations`. MongoDB uses the `items` collection in `MONGODB_DATABASE`, created during startup if it does not exist. New PostgreSQL migrations should be added as lexically ordered SQL files under `internal/database/migrations/sql/`.
 
 ## Configuration
 
@@ -93,7 +109,7 @@ The PostgreSQL table is created by the versioned SQL migration [`0001_create_ite
 | `KAFKA_BROKERS` | `127.0.0.1:9092` | Kafka (comma-separated broker list) |
 | `KAFKA_TOPIC` | `boilerplate.events` | Kafka producer |
 
-See [`.env.example`](.env.example) for local development values. The shared client setup is in [`internal/platform/dependencies`](internal/platform/dependencies): it opens and pings PostgreSQL, MongoDB, and Redis, verifies Kafka connectivity, provides Redis cache and Kafka publish helpers, and closes the clients on shutdown.
+See [`.env.example`](.env.example) for local development values. Configuration is in [`internal/config`](internal/config); connection lifecycle and migrations are in [`internal/database`](internal/database). Database-specific CRUD implementations are in [`internal/repository`](internal/repository), and the domain defines their shared interfaces.
 
 For an authenticated MongoDB server, set both `MONGODB_USERNAME` and `MONGODB_PASSWORD`, and set `MONGODB_AUTH_SOURCE` to the database where that user was created (commonly `admin`). The application user also needs permission to create and use the `items` collection in `MONGODB_DATABASE`. Credentials can alternatively be embedded in `MONGODB_URI`; do not set both URI credentials and the separate username/password variables.
 

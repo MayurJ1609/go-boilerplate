@@ -1,6 +1,8 @@
-package dependencies
+package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -75,5 +77,64 @@ func TestLoadConfigRejectsInvalidRedisDB(t *testing.T) {
 
 	if _, err := LoadConfig(); err == nil {
 		t.Fatal("LoadConfig() accepted invalid REDIS_DB")
+	}
+}
+
+func TestLoadConfigReadsEnvExample(t *testing.T) {
+	tempDir := t.TempDir()
+	envFile := "POSTGRES_DSN=postgres://file-value\nREDIS_ADDR=redis-from-file:6379\n"
+	if err := os.WriteFile(filepath.Join(tempDir, ".env.example"), []byte(envFile), 0600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("change working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(workingDir); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	t.Setenv("POSTGRES_DSN", "postgres://environment-value")
+	t.Setenv("REDIS_ADDR", "")
+
+	config, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if config.PostgresDSN != "postgres://environment-value" {
+		t.Fatalf("Postgres DSN = %q, want environment value", config.PostgresDSN)
+	}
+	if config.RedisAddress != "redis-from-file:6379" {
+		t.Fatalf("Redis address = %q, want value from .env.example", config.RedisAddress)
+	}
+}
+
+func TestLoadConfigRejectsMalformedEnvExample(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tempDir, ".env.example"), []byte("not-a-key-value-pair\n"), 0600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("change working directory: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(workingDir); err != nil {
+			t.Errorf("restore working directory: %v", err)
+		}
+	})
+
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("LoadConfig() accepted malformed .env.example")
 	}
 }

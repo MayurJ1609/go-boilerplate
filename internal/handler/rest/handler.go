@@ -8,17 +8,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/go-boilerplate/internal/service"
-	"github.com/example/go-boilerplate/internal/storage"
+	"github.com/example/go-boilerplate/internal/domain"
 )
 
 type Handler struct {
-	greeter       service.Greeter
+	greeter       domain.Greeter
 	ready         func(context.Context) error
 	cache         Cache
 	publisher     Publisher
-	postgresItems storage.ItemStore
-	mongoItems    storage.ItemStore
+	postgresItems domain.ItemRepository
+	mongoItems    domain.ItemRepository
 }
 
 type Cache interface {
@@ -30,40 +29,40 @@ type Publisher interface {
 	Publish(context.Context, []byte, []byte) error
 }
 
-func NewHandler(greeter service.Greeter) http.Handler {
+func NewHandler(greeter domain.Greeter) http.Handler {
 	return newHandler(greeter, nil, nil, nil)
 }
 
-func NewHandlerWithReadiness(greeter service.Greeter, ready func(context.Context) error) http.Handler {
+func NewHandlerWithReadiness(greeter domain.Greeter, ready func(context.Context) error) http.Handler {
 	return newHandler(greeter, ready, nil, nil)
 }
 
-func NewHandlerWithDependencies(greeter service.Greeter, cache Cache, publisher Publisher, ready func(context.Context) error) http.Handler {
+func NewHandlerWithDependencies(greeter domain.Greeter, cache Cache, publisher Publisher, ready func(context.Context) error) http.Handler {
 	return newHandler(greeter, ready, cache, publisher)
 }
 
 func NewHandlerWithStores(
-	greeter service.Greeter,
+	greeter domain.Greeter,
 	cache Cache,
 	publisher Publisher,
 	ready func(context.Context) error,
-	postgresItems storage.ItemStore,
-	mongoItems storage.ItemStore,
+	postgresItems domain.ItemRepository,
+	mongoItems domain.ItemRepository,
 ) http.Handler {
 	return newHandlerWithStores(greeter, ready, cache, publisher, postgresItems, mongoItems)
 }
 
-func newHandler(greeter service.Greeter, ready func(context.Context) error, cache Cache, publisher Publisher) http.Handler {
+func newHandler(greeter domain.Greeter, ready func(context.Context) error, cache Cache, publisher Publisher) http.Handler {
 	return newHandlerWithStores(greeter, ready, cache, publisher, nil, nil)
 }
 
 func newHandlerWithStores(
-	greeter service.Greeter,
+	greeter domain.Greeter,
 	ready func(context.Context) error,
 	cache Cache,
 	publisher Publisher,
-	postgresItems storage.ItemStore,
-	mongoItems storage.ItemStore,
+	postgresItems domain.ItemRepository,
+	mongoItems domain.ItemRepository,
 ) http.Handler {
 	h := Handler{
 		greeter:       greeter,

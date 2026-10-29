@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-boilerplate/internal/service"
-	"github.com/example/go-boilerplate/internal/transport/grpcapi"
-	"github.com/example/go-boilerplate/internal/transport/rest"
+	"github.com/example/go-boilerplate/internal/domain"
+	greetergrpc "github.com/example/go-boilerplate/internal/handler/grpc"
+	"github.com/example/go-boilerplate/internal/handler/rest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -22,7 +22,7 @@ import (
 )
 
 func TestRESTIntegration(t *testing.T) {
-	server := httptest.NewServer(rest.NewHandler(service.Greeter{}))
+	server := httptest.NewServer(rest.NewHandler(domain.Greeter{}))
 	defer server.Close()
 
 	resp, err := http.Get(server.URL + "/v1/greet?name=Integration")
@@ -46,7 +46,7 @@ func TestRESTIntegration(t *testing.T) {
 func TestGRPCIntegration(t *testing.T) {
 	listener := bufconn.Listen(1024 * 1024)
 	server := grpc.NewServer()
-	grpcapi.RegisterGreeterServer(server, grpcapi.NewGreeterService(service.Greeter{}))
+	greetergrpc.RegisterGreeterServer(server, greetergrpc.NewGreeterService(domain.Greeter{}))
 	go func() {
 		if err := server.Serve(listener); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			t.Errorf("serve gRPC: %v", err)
@@ -71,7 +71,7 @@ func TestGRPCIntegration(t *testing.T) {
 	}
 	defer conn.Close()
 
-	response, err := grpcapi.NewGreeterClient(conn).SayHello(ctx, wrapperspb.String("Integration"))
+	response, err := greetergrpc.NewGreeterClient(conn).SayHello(ctx, wrapperspb.String("Integration"))
 	if err != nil {
 		t.Fatalf("SayHello: %v", err)
 	}

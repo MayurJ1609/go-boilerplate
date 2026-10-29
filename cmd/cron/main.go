@@ -8,18 +8,19 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/example/go-boilerplate/internal/platform/dependencies"
-	"github.com/example/go-boilerplate/internal/service"
+	"github.com/example/go-boilerplate/internal/config"
+	"github.com/example/go-boilerplate/internal/database"
+	"github.com/example/go-boilerplate/internal/domain"
 	"github.com/robfig/cron/v3"
 )
 
 func main() {
-	config, err := dependencies.LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("load dependency configuration: %v", err)
 	}
 	connectCtx, connectCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	clients, err := dependencies.Connect(connectCtx, config)
+	clients, err := database.Connect(connectCtx, cfg)
 	connectCancel()
 	if err != nil {
 		log.Fatalf("connect dependencies: %v", err)
@@ -35,7 +36,7 @@ func main() {
 	spec := envOrDefault("CRON_SPEC", "@every 1m")
 	scheduler := cron.New()
 	if _, err := scheduler.AddFunc(spec, func() {
-		log.Print(service.Greeter{}.Greet("scheduled job"))
+		log.Print(domain.Greeter{}.Greet("scheduled job"))
 	}); err != nil {
 		log.Fatalf("invalid CRON_SPEC %q: %v", spec, err)
 	}

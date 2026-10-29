@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/example/go-boilerplate/internal/transport/grpcapi"
+	greetergrpc "github.com/example/go-boilerplate/internal/handler/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -23,7 +23,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	response, err := grpcapi.NewGreeterClient(conn).SayHello(ctx, wrapperspb.String("gRPC client"))
+	response, err := greetergrpc.NewGreeterClient(conn).SayHello(ctx, wrapperspb.String("gRPC client"))
 	if err != nil {
 		log.Fatalf("call SayHello: %v", err)
 	}

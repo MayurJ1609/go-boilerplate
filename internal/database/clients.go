@@ -1,4 +1,4 @@
-package dependencies
+package database
 
 import (
 	"context"
@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/go-boilerplate/internal/platform/migrations"
+	"github.com/example/go-boilerplate/internal/config"
+	"github.com/example/go-boilerplate/internal/database/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
@@ -25,10 +26,10 @@ type Clients struct {
 	kafkaBrokers  []string
 }
 
-func Connect(ctx context.Context, config Config) (*Clients, error) {
-	clients := &Clients{mongoDatabase: config.MongoDatabase, kafkaBrokers: config.KafkaBrokers}
+func Connect(ctx context.Context, cfg config.Config) (*Clients, error) {
+	clients := &Clients{mongoDatabase: cfg.MongoDatabase, kafkaBrokers: cfg.KafkaBrokers}
 
-	pool, err := pgxpool.New(ctx, config.PostgresDSN)
+	pool, err := pgxpool.New(ctx, cfg.PostgresDSN)
 	if err != nil {
 		return nil, fmt.Errorf("create PostgreSQL pool: %w", err)
 	}
@@ -40,12 +41,12 @@ func Connect(ctx context.Context, config Config) (*Clients, error) {
 		return nil, clients.fail(fmt.Errorf("run PostgreSQL migrations: %w", err))
 	}
 
-	mongoOptions := options.Client().ApplyURI(config.MongoURI)
-	if config.MongoUsername != "" {
+	mongoOptions := options.Client().ApplyURI(cfg.MongoURI)
+	if cfg.MongoUsername != "" {
 		mongoOptions.SetAuth(options.Credential{
-			AuthSource: config.MongoAuthSource,
-			Username:   config.MongoUsername,
-			Password:   config.MongoPassword,
+			AuthSource: cfg.MongoAuthSource,
+			Username:   cfg.MongoUsername,
+			Password:   cfg.MongoPassword,
 		})
 	}
 	mongoClient, err := mongo.Connect(ctx, mongoOptions)
@@ -54,28 +55,28 @@ func Connect(ctx context.Context, config Config) (*Clients, error) {
 	}
 	clients.Mongo = mongoClient
 	if err := mongoClient.Ping(ctx, readpref.Primary()); err != nil {
-		return nil, clients.fail(fmt.Errorf("connect to MongoDB at %s: %w", config.MongoURI, err))
+		return nil, clients.fail(fmt.Errorf("connect to MongoDB at %s: %w", cfg.MongoURI, err))
 	}
-	if err := ensureMongoItemsCollection(ctx, mongoClient.Database(config.MongoDatabase)); err != nil {
+	if err := ensureMongoItemsCollection(ctx, mongoClient.Database(cfg.MongoDatabase)); err != nil {
 		return nil, clients.fail(fmt.Errorf("create MongoDB items collection: %w", err))
 	}
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     config.RedisAddress,
-		Password: config.RedisPassword,
-		DB:       config.RedisDB,
+		Addr:     cfg.RedisAddress,
+		Password: cfg.RedisPassword,
+		DB:       cfg.RedisDB,
 	})
 	clients.Redis = redisClient
 	if err := redisClient.Ping(ctx).Err(); err != nil {
-		return nil, clients.fail(fmt.Errorf("connect to Redis at %s: %w", config.RedisAddress, err))
+		return nil, clients.fail(fmt.Errorf("connect to Redis at %s: %w", cfg.RedisAddress, err))
 	}
 
-	if err := ensureKafkaTopic(ctx, config.KafkaBrokers[0], config.KafkaTopic); err != nil {
-		return nil, clients.fail(fmt.Errorf("prepare Kafka topic %q: %w", config.KafkaTopic, err))
+	if err := ensureKafkaTopic(ctx, cfg.KafkaBrokers[0], cfg.KafkaTopic); err != nil {
+		return nil, clients.fail(fmt.Errorf("prepare Kafka topic %q: %w", cfg.KafkaTopic, err))
 	}
 	clients.Kafka = &kafka.Writer{
-		Addr:         kafka.TCP(config.KafkaBrokers...),
-		Topic:        config.KafkaTopic,
+		Addr:         kafka.TCP(cfg.KafkaBrokers...),
+		Topic:        cfg.KafkaTopic,
 		Balancer:     &kafka.LeastBytes{},
 		RequiredAcks: kafka.RequireOne,
 	}

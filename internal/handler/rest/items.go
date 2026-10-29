@@ -10,13 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/go-boilerplate/internal/model"
-	"github.com/example/go-boilerplate/internal/storage"
+	"github.com/example/go-boilerplate/internal/domain"
 	"github.com/google/uuid"
 )
 
 type itemHandler struct {
-	store storage.ItemStore
+	store domain.ItemRepository
 }
 
 type itemRequest struct {
@@ -24,7 +23,7 @@ type itemRequest struct {
 	Description string `json:"description"`
 }
 
-func registerItemRoutes(mux *http.ServeMux, basePath string, store storage.ItemStore) {
+func registerItemRoutes(mux *http.ServeMux, basePath string, store domain.ItemRepository) {
 	h := itemHandler{store: store}
 	mux.HandleFunc("GET "+basePath, h.list)
 	mux.HandleFunc("POST "+basePath, h.create)
@@ -71,7 +70,7 @@ func (h itemHandler) create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	item, err := h.store.Create(r.Context(), model.Item{
+	item, err := h.store.Create(r.Context(), domain.Item{
 		ID:          uuid.NewString(),
 		Name:        input.Name,
 		Description: input.Description,
@@ -135,7 +134,7 @@ func (h itemHandler) requireStore(w http.ResponseWriter) bool {
 }
 
 func (h itemHandler) handleStoreError(w http.ResponseWriter, operation string, err error) {
-	if errors.Is(err, storage.ErrNotFound) {
+	if errors.Is(err, domain.ErrNotFound) {
 		http.Error(w, "item not found", http.StatusNotFound)
 		return
 	}

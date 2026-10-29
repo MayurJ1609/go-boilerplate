@@ -9,15 +9,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/go-boilerplate/internal/model"
-	"github.com/example/go-boilerplate/internal/service"
-	"github.com/example/go-boilerplate/internal/storage"
+	"github.com/example/go-boilerplate/internal/domain"
 )
 
 func TestItemCRUDUsesIndependentStores(t *testing.T) {
 	postgresStore := newMemoryItemStore()
 	mongoStore := newMemoryItemStore()
-	handler := NewHandlerWithStores(service.Greeter{}, nil, nil, nil, postgresStore, mongoStore)
+	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, nil, postgresStore, mongoStore)
 
 	for _, tt := range []struct {
 		name   string
@@ -34,7 +32,7 @@ func TestItemCRUDUsesIndependentStores(t *testing.T) {
 				t.Fatalf("create status = %d, want %d: %s", create.Code, http.StatusCreated, create.Body)
 			}
 
-			var created model.Item
+			var created domain.Item
 			if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
 				t.Fatalf("decode created item: %v", err)
 			}
@@ -51,7 +49,7 @@ func TestItemCRUDUsesIndependentStores(t *testing.T) {
 			if update.Code != http.StatusOK {
 				t.Fatalf("update status = %d, want %d: %s", update.Code, http.StatusOK, update.Body)
 			}
-			var updated model.Item
+			var updated domain.Item
 			if err := json.Unmarshal(update.Body.Bytes(), &updated); err != nil {
 				t.Fatalf("decode updated item: %v", err)
 			}
@@ -63,7 +61,7 @@ func TestItemCRUDUsesIndependentStores(t *testing.T) {
 			if list.Code != http.StatusOK {
 				t.Fatalf("list status = %d, want %d: %s", list.Code, http.StatusOK, list.Body)
 			}
-			var items []model.Item
+			var items []domain.Item
 			if err := json.Unmarshal(list.Body.Bytes(), &items); err != nil {
 				t.Fatalf("decode item list: %v", err)
 			}
@@ -88,7 +86,7 @@ func TestItemCRUDUsesIndependentStores(t *testing.T) {
 }
 
 func TestCreateItemRejectsInvalidInput(t *testing.T) {
-	handler := NewHandlerWithStores(service.Greeter{}, nil, nil, nil, newMemoryItemStore(), newMemoryItemStore())
+	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, nil, newMemoryItemStore(), newMemoryItemStore())
 	for _, body := range []string{
 		`{"name":" "}`,
 		`{"name":"valid","unexpected":true}`,
@@ -112,37 +110,37 @@ func performJSONRequest(t *testing.T, handler http.Handler, method, path, body s
 }
 
 type memoryItemStore struct {
-	items map[string]model.Item
+	items map[string]domain.Item
 }
 
 func newMemoryItemStore() *memoryItemStore {
-	return &memoryItemStore{items: make(map[string]model.Item)}
+	return &memoryItemStore{items: make(map[string]domain.Item)}
 }
 
-func (s *memoryItemStore) List(context.Context) ([]model.Item, error) {
-	items := make([]model.Item, 0, len(s.items))
+func (s *memoryItemStore) List(context.Context) ([]domain.Item, error) {
+	items := make([]domain.Item, 0, len(s.items))
 	for _, item := range s.items {
 		items = append(items, item)
 	}
 	return items, nil
 }
 
-func (s *memoryItemStore) Get(_ context.Context, id string) (model.Item, error) {
+func (s *memoryItemStore) Get(_ context.Context, id string) (domain.Item, error) {
 	item, ok := s.items[id]
 	if !ok {
-		return model.Item{}, fmt.Errorf("lookup: %w", storage.ErrNotFound)
+		return domain.Item{}, fmt.Errorf("lookup: %w", domain.ErrNotFound)
 	}
 	return item, nil
 }
 
-func (s *memoryItemStore) Create(_ context.Context, item model.Item) (model.Item, error) {
+func (s *memoryItemStore) Create(_ context.Context, item domain.Item) (domain.Item, error) {
 	s.items[item.ID] = item
 	return item, nil
 }
 
-func (s *memoryItemStore) Update(_ context.Context, item model.Item) (model.Item, error) {
+func (s *memoryItemStore) Update(_ context.Context, item domain.Item) (domain.Item, error) {
 	if _, ok := s.items[item.ID]; !ok {
-		return model.Item{}, storage.ErrNotFound
+		return domain.Item{}, domain.ErrNotFound
 	}
 	s.items[item.ID] = item
 	return item, nil
@@ -150,7 +148,7 @@ func (s *memoryItemStore) Update(_ context.Context, item model.Item) (model.Item
 
 func (s *memoryItemStore) Delete(_ context.Context, id string) error {
 	if _, ok := s.items[id]; !ok {
-		return storage.ErrNotFound
+		return domain.ErrNotFound
 	}
 	delete(s.items, id)
 	return nil

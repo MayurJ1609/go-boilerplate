@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-//go:embed migrations/*.sql
+//go:embed sql/*.sql
 var migrationFiles embed.FS
 
 func Run(ctx context.Context, pool *pgxpool.Pool) error {
@@ -23,7 +23,7 @@ func Run(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("create migration tracking table: %w", err)
 	}
 
-	files, err := fs.ReadDir(migrationFiles, "migrations")
+	files, err := fs.ReadDir(migrationFiles, "sql")
 	if err != nil {
 		return fmt.Errorf("read embedded migrations: %w", err)
 	}
@@ -58,7 +58,7 @@ func apply(ctx context.Context, pool *pgxpool.Pool, version string) error {
 		return nil
 	}
 
-	script, err := migrationFiles.ReadFile("migrations/" + version)
+	script, err := migrationFiles.ReadFile("sql/" + version)
 	if err != nil {
 		return fmt.Errorf("read migration %s: %w", version, err)
 	}

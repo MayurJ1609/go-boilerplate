@@ -10,19 +10,20 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/example/go-boilerplate/internal/platform/dependencies"
-	"github.com/example/go-boilerplate/internal/service"
-	"github.com/example/go-boilerplate/internal/transport/grpcapi"
+	"github.com/example/go-boilerplate/internal/config"
+	"github.com/example/go-boilerplate/internal/database"
+	"github.com/example/go-boilerplate/internal/domain"
+	greetergrpc "github.com/example/go-boilerplate/internal/handler/grpc"
 	"google.golang.org/grpc"
 )
 
 func main() {
-	config, err := dependencies.LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("load dependency configuration: %v", err)
 	}
 	connectCtx, connectCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	clients, err := dependencies.Connect(connectCtx, config)
+	clients, err := database.Connect(connectCtx, cfg)
 	connectCancel()
 	if err != nil {
 		log.Fatalf("connect dependencies: %v", err)
@@ -42,7 +43,7 @@ func main() {
 	}
 
 	server := grpc.NewServer()
-	grpcapi.RegisterGreeterServer(server, grpcapi.NewGreeterService(service.Greeter{}))
+	greetergrpc.RegisterGreeterServer(server, greetergrpc.NewGreeterService(domain.Greeter{}))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
