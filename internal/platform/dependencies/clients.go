@@ -33,7 +33,7 @@ func Connect(ctx context.Context, config Config) (*Clients, error) {
 	}
 	clients.Postgres = pool
 	if err := pool.Ping(ctx); err != nil {
-		return nil, clients.fail(fmt.Errorf("connect to PostgreSQL: %w", err))
+		return nil, clients.fail(fmt.Errorf("connect to PostgreSQL at configured DSN: %w", err))
 	}
 
 	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(config.MongoURI))
@@ -42,7 +42,7 @@ func Connect(ctx context.Context, config Config) (*Clients, error) {
 	}
 	clients.Mongo = mongoClient
 	if err := mongoClient.Ping(ctx, readpref.Primary()); err != nil {
-		return nil, clients.fail(fmt.Errorf("connect to MongoDB: %w", err))
+		return nil, clients.fail(fmt.Errorf("connect to MongoDB at %s: %w", config.MongoURI, err))
 	}
 
 	redisClient := redis.NewClient(&redis.Options{
@@ -52,16 +52,11 @@ func Connect(ctx context.Context, config Config) (*Clients, error) {
 	})
 	clients.Redis = redisClient
 	if err := redisClient.Ping(ctx).Err(); err != nil {
-		return nil, clients.fail(fmt.Errorf("connect to Redis: %w", err))
+		return nil, clients.fail(fmt.Errorf("connect to Redis at %s: %w", config.RedisAddress, err))
 	}
 
-	dialer := &kafka.Dialer{Timeout: 5 * time.Second}
-	connection, err := dialer.DialContext(ctx, "tcp", config.KafkaBrokers[0])
-	if err != nil {
-		return nil, clients.fail(fmt.Errorf("connect to Kafka broker %s: %w", config.KafkaBrokers[0], err))
-	}
-	if err := connection.Close(); err != nil {
-		return nil, clients.fail(fmt.Errorf("close Kafka verification connection: %w", err))
+	if err := ensureKafkaTopic(ctx, config.KafkaBrokers[0], config.KafkaTopic); err != nil {
+		return nil, clients.fail(fmt.Errorf("prepare Kafka topic %q: %w", config.KafkaTopic, err))
 	}
 	clients.Kafka = &kafka.Writer{
 		Addr:         kafka.TCP(config.KafkaBrokers...),
@@ -71,6 +66,73 @@ func Connect(ctx context.Context, config Config) (*Clients, error) {
 	}
 
 	return clients, nil
+}
+
+func ensureKafkaTopic(ctx context.Context, brokerAddress, topic string) error {
+	client := &kafka.Client{
+		Addr:    kafka.TCP(brokerAddress),
+		Timeout: 5 * time.Second,
+	}
+	response, err := client.CreateTopics(ctx, &kafka.CreateTopicsRequest{
+		Topics: []kafka.TopicConfig{{
+			Topic:             topic,
+			NumPartitions:     1,
+			ReplicationFactor: 1,
+		}},
+	})
+	if err != nil {
+		return fmt.Errorf("request topic creation through broker %s: %w", brokerAddress, err)
+	}
+	if err := response.Errors[topic]; err != nil && !errors.Is(err, kafka.TopicAlreadyExists) {
+		return fmt.Errorf("broker %s rejected topic creation: %w", brokerAddress, err)
+	}
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	var lastMetadataErr error
+	for {
+		metadata, err := client.Metadata(ctx, &kafka.MetadataRequest{Topics: []string{topic}})
+		if err == nil && kafkaTopicReady(metadata, topic) {
+			return nil
+		}
+		if err != nil {
+			lastMetadataErr = err
+		}
+		select {
+		case <-ctx.Done():
+			return errors.Join(
+				fmt.Errorf("wait for topic %q to become available: %w", topic, ctx.Err()),
+				wrapError("last Kafka metadata request", lastMetadataErr),
+			)
+		case <-ticker.C:
+		}
+	}
+}
+
+func wrapError(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", operation, err)
+}
+
+func kafkaTopicReady(metadata *kafka.MetadataResponse, topicName string) bool {
+	for _, topic := range metadata.Topics {
+		if topic.Name != topicName || topic.Error != nil || len(topic.Partitions) == 0 {
+			continue
+		}
+		ready := true
+		for _, partition := range topic.Partitions {
+			if partition.Error != nil {
+				ready = false
+				break
+			}
+		}
+		if ready {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Clients) MongoDatabase() *mongo.Database {

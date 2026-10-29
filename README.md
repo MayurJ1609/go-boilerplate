@@ -15,7 +15,9 @@ The REST API, gRPC server, and cron runner verify all four backends at startup. 
 make infra-up
 ```
 
-This starts PostgreSQL (`localhost:5432`), MongoDB (`localhost:27017`), Redis (`localhost:6379`), and Kafka (`localhost:9092`) using [`docker-compose.yml`](docker-compose.yml). Stop them with `make infra-down`.
+This starts PostgreSQL (`localhost:5432`), MongoDB (`localhost:27017`), Redis (`localhost:6379`), and Kafka (`127.0.0.1:9092`) using [`docker-compose.yml`](docker-compose.yml). Stop them with `make infra-down`.
+
+If Kafka was already running when you changed its advertised listener, recreate its container with `docker compose up -d --force-recreate kafka` before restarting the app.
 
 ## Run locally
 
@@ -27,6 +29,14 @@ make run-grpc-server
 make run-grpc-client
 make run-cron
 ```
+
+## Debug in VS Code
+
+Install the Go extension for VS Code and Delve (`dlv`). To install Delve using the workspace, run **Terminal → Run Task → Install Delve debugger** (or run `go install github.com/go-delve/delve/cmd/dlv@latest`). Ensure Go's binary directory (`$(go env GOBIN)` or, when unset, `$(go env GOPATH)/bin`) is on VS Code's `PATH`; restart VS Code after installing if the debugger is still not found.
+
+Then use **Terminal → Run Task → Start local dependencies**. Once the dependencies are healthy, open **Run and Debug** and choose **Debug REST API**, **Debug gRPC server**, **Debug gRPC client**, or **Debug cron**. Set breakpoints as usual. The configurations load the local development values from [`.env.example`](.env.example); change those values if your services use different addresses.
+
+The gRPC client requires the gRPC server to be running separately. Stop the local backend containers with **Terminal → Run Task → Stop local dependencies** when finished. The **Run all tests** task runs both unit and integration test suites.
 
 The REST API listens on `:8080`; `GET /readyz` checks the backend connections. The gRPC server listens on `:9090`; run it before starting the gRPC client.
 
@@ -40,7 +50,7 @@ REST routes:
 - `GET /readyz` — readiness check for PostgreSQL, MongoDB, Redis, and Kafka
 - `GET /v1/greet?name=...` — greeting (name is optional; defaults to `World`)
 
-The greeting endpoint caches responses in Redis for five minutes and publishes a JSON greeting event to the configured Kafka topic. PostgreSQL and MongoDB clients are initialized and exposed by the shared dependency package for application persistence.
+The greeting endpoint caches responses in Redis for five minutes and publishes a JSON greeting event to the configured Kafka topic. On startup, the service requests topic creation through the configured Kafka bootstrap broker with one partition and one replica if needed, then waits for partition metadata to become available. The Kafka user must have permission to create topics. PostgreSQL and MongoDB clients are initialized and exposed by the shared dependency package for application persistence.
 
 ## Configuration
 
@@ -51,12 +61,12 @@ The greeting endpoint caches responses in Redis for five minutes and publishes a
 | `GRPC_TARGET` | `localhost:9090` | gRPC client |
 | `CRON_SPEC` | `@every 1m` | cron runner |
 | `POSTGRES_DSN` | `postgres://boilerplate:boilerplate@localhost:5432/boilerplate?sslmode=disable` | PostgreSQL |
-| `MONGODB_URI` | `mongodb://localhost:27017` | MongoDB |
+| `MONGODB_URI` | `mongodb://127.0.0.1:27017` | MongoDB |
 | `MONGODB_DATABASE` | `boilerplate` | MongoDB |
-| `REDIS_ADDR` | `localhost:6379` | Redis |
+| `REDIS_ADDR` | `127.0.0.1:6379` | Redis |
 | `REDIS_PASSWORD` | empty | Redis |
 | `REDIS_DB` | `0` | Redis |
-| `KAFKA_BROKERS` | `localhost:9092` | Kafka (comma-separated broker list) |
+| `KAFKA_BROKERS` | `127.0.0.1:9092` | Kafka (comma-separated broker list) |
 | `KAFKA_TOPIC` | `boilerplate.events` | Kafka producer |
 
 See [`.env.example`](.env.example) for local development values. The shared client setup is in [`internal/platform/dependencies`](internal/platform/dependencies): it opens and pings PostgreSQL, MongoDB, and Redis, verifies Kafka connectivity, provides Redis cache and Kafka publish helpers, and closes the clients on shutdown.

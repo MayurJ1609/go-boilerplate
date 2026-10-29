@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install Delve debugger",
+      "type": "shell",
+      "command": "go",
+      "args": ["install", "github.com/go-delve/delve/cmd/dlv@latest"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Start local dependencies",
+      "type": "shell",
+      "command": "make",
+      "args": ["infra-up"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Stop local dependencies",
+      "type": "shell",
+      "command": "make",
+      "args": ["infra-down"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Run all tests",
+      "type": "shell",
+      "command": "make",
+      "args": ["test"],
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

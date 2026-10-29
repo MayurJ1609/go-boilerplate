@@ -27,16 +27,16 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("REDIS_DB must be non-negative")
 	}
 
-	brokers := splitCSV(envOrDefault("KAFKA_BROKERS", "localhost:9092"))
+	brokers := splitCSV(envOrDefault("KAFKA_BROKERS", "127.0.0.1:9092"))
 	if len(brokers) == 0 {
 		return Config{}, fmt.Errorf("KAFKA_BROKERS must contain at least one broker")
 	}
 
 	return Config{
 		PostgresDSN:   envOrDefault("POSTGRES_DSN", "postgres://postgres:postgres@localhost:5432/boilerplate?sslmode=disable"),
-		MongoURI:      envOrDefault("MONGODB_URI", "mongodb://localhost:27017"),
+		MongoURI:      envOrDefault("MONGODB_URI", "mongodb://127.0.0.1:27017"),
 		MongoDatabase: envOrDefault("MONGODB_DATABASE", "boilerplate"),
-		RedisAddress:  envOrDefault("REDIS_ADDR", "localhost:6379"),
+		RedisAddress:  envOrDefault("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword: os.Getenv("REDIS_PASSWORD"),
 		RedisDB:       redisDB,
 		KafkaBrokers:  brokers,

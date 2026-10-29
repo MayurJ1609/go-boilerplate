@@ -21,10 +21,10 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if config.PostgresDSN == "" || config.MongoURI == "" || config.MongoDatabase == "" {
 		t.Fatal("database connection defaults must not be empty")
 	}
-	if config.RedisAddress != "localhost:6379" || config.RedisDB != 0 {
+	if config.RedisAddress != "127.0.0.1:6379" || config.RedisDB != 0 {
 		t.Fatalf("unexpected Redis defaults: address=%q db=%d", config.RedisAddress, config.RedisDB)
 	}
-	if len(config.KafkaBrokers) != 1 || config.KafkaBrokers[0] != "localhost:9092" {
+	if len(config.KafkaBrokers) != 1 || config.KafkaBrokers[0] != "127.0.0.1:9092" {
 		t.Fatalf("unexpected Kafka brokers: %v", config.KafkaBrokers)
 	}
 }
