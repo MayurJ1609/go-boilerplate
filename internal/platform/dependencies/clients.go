@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/example/go-boilerplate/internal/platform/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
@@ -35,14 +36,28 @@ func Connect(ctx context.Context, config Config) (*Clients, error) {
 	if err := pool.Ping(ctx); err != nil {
 		return nil, clients.fail(fmt.Errorf("connect to PostgreSQL at configured DSN: %w", err))
 	}
+	if err := migrations.Run(ctx, pool); err != nil {
+		return nil, clients.fail(fmt.Errorf("run PostgreSQL migrations: %w", err))
+	}
 
-	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(config.MongoURI))
+	mongoOptions := options.Client().ApplyURI(config.MongoURI)
+	if config.MongoUsername != "" {
+		mongoOptions.SetAuth(options.Credential{
+			AuthSource: config.MongoAuthSource,
+			Username:   config.MongoUsername,
+			Password:   config.MongoPassword,
+		})
+	}
+	mongoClient, err := mongo.Connect(ctx, mongoOptions)
 	if err != nil {
 		return nil, clients.fail(fmt.Errorf("create MongoDB client: %w", err))
 	}
 	clients.Mongo = mongoClient
 	if err := mongoClient.Ping(ctx, readpref.Primary()); err != nil {
 		return nil, clients.fail(fmt.Errorf("connect to MongoDB at %s: %w", config.MongoURI, err))
+	}
+	if err := ensureMongoItemsCollection(ctx, mongoClient.Database(config.MongoDatabase)); err != nil {
+		return nil, clients.fail(fmt.Errorf("create MongoDB items collection: %w", err))
 	}
 
 	redisClient := redis.NewClient(&redis.Options{
@@ -66,6 +81,18 @@ func Connect(ctx context.Context, config Config) (*Clients, error) {
 	}
 
 	return clients, nil
+}
+
+func ensureMongoItemsCollection(ctx context.Context, database *mongo.Database) error {
+	err := database.CreateCollection(ctx, "items")
+	if err == nil {
+		return nil
+	}
+	var commandErr mongo.CommandError
+	if errors.As(err, &commandErr) && commandErr.Code == 48 {
+		return nil
+	}
+	return err
 }
 
 func ensureKafkaTopic(ctx context.Context, brokerAddress, topic string) error {

@@ -52,6 +52,27 @@ REST routes:
 
 The greeting endpoint caches responses in Redis for five minutes and publishes a JSON greeting event to the configured Kafka topic. On startup, the service requests topic creation through the configured Kafka bootstrap broker with one partition and one replica if needed, then waits for partition metadata to become available. The Kafka user must have permission to create topics. PostgreSQL and MongoDB clients are initialized and exposed by the shared dependency package for application persistence.
 
+## Sample item CRUD
+
+The REST API exposes independent item stores; operations on one backend do not write to the other:
+
+- `GET|POST /v1/postgres/items` and `GET|PUT|DELETE /v1/postgres/items/{id}`
+- `GET|POST /v1/mongo/items` and `GET|PUT|DELETE /v1/mongo/items/{id}`
+
+Create and update requests require a non-empty `name`; `description` is optional:
+
+```sh
+curl -X POST http://localhost:8080/v1/postgres/items \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"example","description":"stored in PostgreSQL"}'
+
+curl -X POST http://localhost:8080/v1/mongo/items \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"example","description":"stored in MongoDB"}'
+```
+
+The PostgreSQL table is created by the versioned SQL migration [`0001_create_items.sql`](internal/platform/migrations/migrations/0001_create_items.sql), applied automatically at service startup and recorded in `schema_migrations`. MongoDB uses the `items` collection in `MONGODB_DATABASE`, created during startup if it does not exist. New PostgreSQL migrations should be added as lexically ordered SQL files under `internal/platform/migrations/migrations/`.
+
 ## Configuration
 
 | Variable | Default | Used by |
@@ -63,6 +84,9 @@ The greeting endpoint caches responses in Redis for five minutes and publishes a
 | `POSTGRES_DSN` | `postgres://boilerplate:boilerplate@localhost:5432/boilerplate?sslmode=disable` | PostgreSQL |
 | `MONGODB_URI` | `mongodb://127.0.0.1:27017` | MongoDB |
 | `MONGODB_DATABASE` | `boilerplate` | MongoDB |
+| `MONGODB_USERNAME` | empty | MongoDB (optional; set with password) |
+| `MONGODB_PASSWORD` | empty | MongoDB (optional; set with username) |
+| `MONGODB_AUTH_SOURCE` | `admin` | MongoDB authentication database |
 | `REDIS_ADDR` | `127.0.0.1:6379` | Redis |
 | `REDIS_PASSWORD` | empty | Redis |
 | `REDIS_DB` | `0` | Redis |
@@ -70,6 +94,8 @@ The greeting endpoint caches responses in Redis for five minutes and publishes a
 | `KAFKA_TOPIC` | `boilerplate.events` | Kafka producer |
 
 See [`.env.example`](.env.example) for local development values. The shared client setup is in [`internal/platform/dependencies`](internal/platform/dependencies): it opens and pings PostgreSQL, MongoDB, and Redis, verifies Kafka connectivity, provides Redis cache and Kafka publish helpers, and closes the clients on shutdown.
+
+For an authenticated MongoDB server, set both `MONGODB_USERNAME` and `MONGODB_PASSWORD`, and set `MONGODB_AUTH_SOURCE` to the database where that user was created (commonly `admin`). The application user also needs permission to create and use the `items` collection in `MONGODB_DATABASE`. Credentials can alternatively be embedded in `MONGODB_URI`; do not set both URI credentials and the separate username/password variables.
 
 ## Tests and build
 

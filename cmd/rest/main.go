@@ -12,6 +12,8 @@ import (
 
 	"github.com/example/go-boilerplate/internal/platform/dependencies"
 	"github.com/example/go-boilerplate/internal/service"
+	mongostore "github.com/example/go-boilerplate/internal/storage/mongo"
+	"github.com/example/go-boilerplate/internal/storage/postgres"
 	"github.com/example/go-boilerplate/internal/transport/rest"
 )
 
@@ -36,8 +38,15 @@ func main() {
 
 	addr := envOrDefault("HTTP_ADDR", ":8080")
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           rest.NewHandlerWithDependencies(service.Greeter{}, clients, clients, clients.Ping),
+		Addr: addr,
+		Handler: rest.NewHandlerWithStores(
+			service.Greeter{},
+			clients,
+			clients,
+			clients.Ping,
+			postgres.NewItems(clients.Postgres),
+			mongostore.NewItems(clients.MongoDatabase()),
+		),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

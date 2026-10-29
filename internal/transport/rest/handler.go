@@ -9,13 +9,16 @@ import (
 	"time"
 
 	"github.com/example/go-boilerplate/internal/service"
+	"github.com/example/go-boilerplate/internal/storage"
 )
 
 type Handler struct {
-	greeter   service.Greeter
-	ready     func(context.Context) error
-	cache     Cache
-	publisher Publisher
+	greeter       service.Greeter
+	ready         func(context.Context) error
+	cache         Cache
+	publisher     Publisher
+	postgresItems storage.ItemStore
+	mongoItems    storage.ItemStore
 }
 
 type Cache interface {
@@ -39,12 +42,43 @@ func NewHandlerWithDependencies(greeter service.Greeter, cache Cache, publisher 
 	return newHandler(greeter, ready, cache, publisher)
 }
 
+func NewHandlerWithStores(
+	greeter service.Greeter,
+	cache Cache,
+	publisher Publisher,
+	ready func(context.Context) error,
+	postgresItems storage.ItemStore,
+	mongoItems storage.ItemStore,
+) http.Handler {
+	return newHandlerWithStores(greeter, ready, cache, publisher, postgresItems, mongoItems)
+}
+
 func newHandler(greeter service.Greeter, ready func(context.Context) error, cache Cache, publisher Publisher) http.Handler {
-	h := Handler{greeter: greeter, ready: ready, cache: cache, publisher: publisher}
+	return newHandlerWithStores(greeter, ready, cache, publisher, nil, nil)
+}
+
+func newHandlerWithStores(
+	greeter service.Greeter,
+	ready func(context.Context) error,
+	cache Cache,
+	publisher Publisher,
+	postgresItems storage.ItemStore,
+	mongoItems storage.ItemStore,
+) http.Handler {
+	h := Handler{
+		greeter:       greeter,
+		ready:         ready,
+		cache:         cache,
+		publisher:     publisher,
+		postgresItems: postgresItems,
+		mongoItems:    mongoItems,
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.health)
 	mux.HandleFunc("GET /readyz", h.readiness)
 	mux.HandleFunc("GET /v1/greet", h.greet)
+	registerItemRoutes(mux, "/v1/postgres/items", h.postgresItems)
+	registerItemRoutes(mux, "/v1/mongo/items", h.mongoItems)
 	return mux
 }
 
