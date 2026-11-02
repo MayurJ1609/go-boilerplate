@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -38,7 +38,7 @@ func (h itemHandler) list(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.store.List(r.Context())
 	if err != nil {
-		h.internalError(w, "list items", err)
+		h.internalError(w, r, "list items", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -50,7 +50,7 @@ func (h itemHandler) get(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := h.store.Get(r.Context(), r.PathValue("id"))
 	if err != nil {
-		h.handleStoreError(w, "get item", err)
+		h.handleStoreError(w, r, "get item", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
@@ -78,7 +78,7 @@ func (h itemHandler) create(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:   now,
 	})
 	if err != nil {
-		h.internalError(w, "create item", err)
+		h.internalError(w, r, "create item", err)
 		return
 	}
 	w.Header().Set("Location", r.URL.Path+"/"+item.ID)
@@ -100,7 +100,7 @@ func (h itemHandler) update(w http.ResponseWriter, r *http.Request) {
 
 	item, err := h.store.Get(r.Context(), r.PathValue("id"))
 	if err != nil {
-		h.handleStoreError(w, "get item for update", err)
+		h.handleStoreError(w, r, "get item for update", err)
 		return
 	}
 	item.Name = input.Name
@@ -108,7 +108,7 @@ func (h itemHandler) update(w http.ResponseWriter, r *http.Request) {
 	item.UpdatedAt = time.Now().UTC()
 	item, err = h.store.Update(r.Context(), item)
 	if err != nil {
-		h.handleStoreError(w, "update item", err)
+		h.handleStoreError(w, r, "update item", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
@@ -119,7 +119,7 @@ func (h itemHandler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.Delete(r.Context(), r.PathValue("id")); err != nil {
-		h.handleStoreError(w, "delete item", err)
+		h.handleStoreError(w, r, "delete item", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -133,16 +133,16 @@ func (h itemHandler) requireStore(w http.ResponseWriter) bool {
 	return false
 }
 
-func (h itemHandler) handleStoreError(w http.ResponseWriter, operation string, err error) {
+func (h itemHandler) handleStoreError(w http.ResponseWriter, r *http.Request, operation string, err error) {
 	if errors.Is(err, domain.ErrNotFound) {
 		http.Error(w, "item not found", http.StatusNotFound)
 		return
 	}
-	h.internalError(w, operation, err)
+	h.internalError(w, r, operation, err)
 }
 
-func (h itemHandler) internalError(w http.ResponseWriter, operation string, err error) {
-	log.Printf("%s: %v", operation, err)
+func (h itemHandler) internalError(w http.ResponseWriter, r *http.Request, operation string, err error) {
+	slog.ErrorContext(r.Context(), operation, "error", err)
 	http.Error(w, "internal server error", http.StatusInternalServerError)
 }
 
@@ -169,6 +169,6 @@ func writeJSON(w http.ResponseWriter, statusCode int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(value); err != nil {
-		log.Printf("encode JSON response: %v", err)
+		slog.Error("encode JSON response", "error", err)
 	}
 }

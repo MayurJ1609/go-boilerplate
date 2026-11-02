@@ -15,7 +15,7 @@ import (
 func TestItemCRUDUsesIndependentStores(t *testing.T) {
 	postgresStore := newMemoryItemStore()
 	mongoStore := newMemoryItemStore()
-	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, nil, postgresStore, mongoStore)
+	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, postgresStore, mongoStore)
 
 	for _, tt := range []struct {
 		name   string
@@ -86,7 +86,7 @@ func TestItemCRUDUsesIndependentStores(t *testing.T) {
 }
 
 func TestCreateItemRejectsInvalidInput(t *testing.T) {
-	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, nil, newMemoryItemStore(), newMemoryItemStore())
+	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, newMemoryItemStore(), newMemoryItemStore())
 	for _, body := range []string{
 		`{"name":" "}`,
 		`{"name":"valid","unexpected":true}`,

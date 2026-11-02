@@ -1,9 +1,11 @@
 FROM golang:1.23-alpine AS build
 
 WORKDIR /src
-COPY go.mod go.sum ./
+COPY go-boilerplate/go.mod go-boilerplate/go.sum ./go-boilerplate/
+COPY common-lib/ ./common-lib/
+WORKDIR /src/go-boilerplate
 RUN go mod download
-COPY . .
+COPY go-boilerplate/ ./
 
 ARG APP=rest
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/app ./cmd/${APP}

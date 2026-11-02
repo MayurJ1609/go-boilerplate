@@ -2,10 +2,11 @@ package domain
 
 import (
 	"context"
-	"errors"
+
+	commonerrors "github.com/MayurJ1609/common-lib/errors"
 )
 
-var ErrNotFound = errors.New("item not found")
+var ErrNotFound = commonerrors.New(commonerrors.CodeNotFound, "item not found")
 
 type ItemRepository interface {
 	List(context.Context) ([]Item, error)

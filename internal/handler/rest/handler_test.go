@@ -31,53 +31,6 @@ func TestGreetEndpoint(t *testing.T) {
 	}
 }
 
-func TestHealthEndpoint(t *testing.T) {
-	handler := NewHandler(domain.Greeter{})
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	rec := httptest.NewRecorder()
-
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
-	}
-}
-
-func TestReadinessEndpoint(t *testing.T) {
-	tests := []struct {
-		name       string
-		ready      func(context.Context) error
-		wantStatus int
-	}{
-		{
-			name:       "ready",
-			ready:      func(context.Context) error { return nil },
-			wantStatus: http.StatusNoContent,
-		},
-		{
-			name: "dependency unavailable",
-			ready: func(context.Context) error {
-				return context.DeadlineExceeded
-			},
-			wantStatus: http.StatusServiceUnavailable,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			handler := NewHandlerWithReadiness(domain.Greeter{}, tt.ready)
-			req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
-			rec := httptest.NewRecorder()
-
-			handler.ServeHTTP(rec, req)
-
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
-			}
-		})
-	}
-}
-
 type testCache struct {
 	values map[string]string
 }
@@ -109,7 +62,7 @@ func (p *testPublisher) Publish(_ context.Context, key, value []byte) error {
 func TestGreetUsesCacheAndPublishesEvent(t *testing.T) {
 	cache := &testCache{values: map[string]string{"greeting:Ada": "Hello, Ada!"}}
 	publisher := &testPublisher{}
-	handler := NewHandlerWithDependencies(domain.Greeter{}, cache, publisher, func(context.Context) error { return nil })
+	handler := NewHandlerWithDependencies(domain.Greeter{}, cache, publisher)
 	req := httptest.NewRequest(http.MethodGet, "/v1/greet?name=Ada", nil)
 	rec := httptest.NewRecorder()
 
@@ -131,7 +84,7 @@ func TestGreetUsesCacheAndPublishesEvent(t *testing.T) {
 }
 
 func TestGreetReturnsUnavailableWhenCacheFails(t *testing.T) {
-	handler := NewHandlerWithDependencies(domain.Greeter{}, failingCache{}, &testPublisher{}, nil)
+	handler := NewHandlerWithDependencies(domain.Greeter{}, failingCache{}, &testPublisher{})
 	req := httptest.NewRequest(http.MethodGet, "/v1/greet?name=Ada", nil)
 	rec := httptest.NewRecorder()
 

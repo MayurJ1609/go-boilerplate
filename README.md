@@ -6,15 +6,20 @@ A Go starter project with independent REST API, gRPC server, gRPC client, and cr
 
 ```text
 internal/
-├── config/       # Environment-based configuration
-├── database/     # PostgreSQL, MongoDB, Redis, Kafka connections and migrations
 ├── domain/       # Core models, business logic, and repository interfaces
 ├── handler/      # REST and gRPC transport handlers
-├── middleware/   # HTTP request logging
 └── repository/   # PostgreSQL and MongoDB persistence implementations
 ```
 
+The shared `github.com/MayurJ1609/common-lib` module owns configuration, database
+clients and migrations, health endpoints, HTTP middleware, logging, metrics,
+errors, server lifecycle, and tracing.
+
 Commands under `cmd/` compose these layers into each executable.
+
+The module is checked out beside this repository and referenced through a local
+`../common-lib` replacement in `go.mod`. Once common-lib is released as a module
+version, standalone services can add it with `go get`.
 
 ## Requirements
 
@@ -44,7 +49,7 @@ make run-grpc-client
 make run-cron
 ```
 
-`LoadConfig` reads `.env.example` from the current working directory when present. Non-empty process environment variables take precedence; if the file is absent, built-in defaults are used.
+`config.LoadDependencyConfig` from common-lib reads `.env.example` from the current working directory when present. Non-empty process environment variables take precedence; if the file is absent, built-in defaults are used.
 
 ## Debug in VS Code
 
@@ -63,7 +68,8 @@ curl 'http://localhost:8080/v1/greet?name=Ada'
 REST routes:
 
 - `GET /healthz` — liveness check
-- `GET /readyz` — readiness check for PostgreSQL, MongoDB, Redis, and Kafka
+- `GET /readyz` — JSON readiness check for PostgreSQL, MongoDB, Redis, and Kafka
+- `GET /metrics` — Prometheus process, Go runtime, HTTP, and PostgreSQL pool metrics
 - `GET /v1/greet?name=...` — greeting (name is optional; defaults to `World`)
 
 The greeting endpoint caches responses in Redis for five minutes and publishes a JSON greeting event to the configured Kafka topic. On startup, the service requests topic creation through the configured Kafka bootstrap broker with one partition and one replica if needed, then waits for partition metadata to become available. The Kafka user must have permission to create topics. PostgreSQL and MongoDB clients are initialized and exposed by the shared dependency package for application persistence.
@@ -87,7 +93,7 @@ curl -X POST http://localhost:8080/v1/mongo/items \
   -d '{"name":"example","description":"stored in MongoDB"}'
 ```
 
-The PostgreSQL table is created by the versioned SQL migration [`0001_create_items.sql`](internal/database/migrations/sql/0001_create_items.sql), applied automatically at service startup and recorded in `schema_migrations`. MongoDB uses the `items` collection in `MONGODB_DATABASE`, created during startup if it does not exist. New PostgreSQL migrations should be added as lexically ordered SQL files under `internal/database/migrations/sql/`.
+The PostgreSQL table is created by the versioned SQL migration [`0001_create_items.sql`](../common-lib/db/migrations/sql/0001_create_items.sql), applied automatically at service startup and recorded in `schema_migrations`. MongoDB collections configured by `MONGODB_COLLECTIONS` (default: `items`) are created during startup if they do not exist. PostgreSQL migrations are maintained in common-lib under `db/migrations/sql/`.
 
 ## Configuration
 
@@ -97,19 +103,22 @@ The PostgreSQL table is created by the versioned SQL migration [`0001_create_ite
 | `GRPC_ADDR` | `:9090` | gRPC server |
 | `GRPC_TARGET` | `localhost:9090` | gRPC client |
 | `CRON_SPEC` | `@every 1m` | cron runner |
+| `LOG_LEVEL` | `info` | structured service logging |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `localhost:4317` | REST API trace exporter |
 | `POSTGRES_DSN` | `postgres://boilerplate:boilerplate@localhost:5432/boilerplate?sslmode=disable` | PostgreSQL |
 | `MONGODB_URI` | `mongodb://127.0.0.1:27017` | MongoDB |
 | `MONGODB_DATABASE` | `boilerplate` | MongoDB |
 | `MONGODB_USERNAME` | empty | MongoDB (optional; set with password) |
 | `MONGODB_PASSWORD` | empty | MongoDB (optional; set with username) |
 | `MONGODB_AUTH_SOURCE` | `admin` | MongoDB authentication database |
+| `MONGODB_COLLECTIONS` | `items` | comma-separated MongoDB collections |
 | `REDIS_ADDR` | `127.0.0.1:6379` | Redis |
 | `REDIS_PASSWORD` | empty | Redis |
 | `REDIS_DB` | `0` | Redis |
 | `KAFKA_BROKERS` | `127.0.0.1:9092` | Kafka (comma-separated broker list) |
 | `KAFKA_TOPIC` | `boilerplate.events` | Kafka producer |
 
-See [`.env.example`](.env.example) for local development values. Configuration is in [`internal/config`](internal/config); connection lifecycle and migrations are in [`internal/database`](internal/database). Database-specific CRUD implementations are in [`internal/repository`](internal/repository), and the domain defines their shared interfaces.
+See [`.env.example`](.env.example) for local development values. Configuration and shared database lifecycle/migrations are provided by common-lib. Database-specific CRUD implementations remain in [`internal/repository`](internal/repository), and the domain defines their shared interfaces.
 
 For an authenticated MongoDB server, set both `MONGODB_USERNAME` and `MONGODB_PASSWORD`, and set `MONGODB_AUTH_SOURCE` to the database where that user was created (commonly `admin`). The application user also needs permission to create and use the `items` collection in `MONGODB_DATABASE`. Credentials can alternatively be embedded in `MONGODB_URI`; do not set both URI credentials and the separate username/password variables.
 
@@ -131,11 +140,11 @@ make build-cron                       # build only cron runner into bin/cron
 Choose the executable at build time with `APP` (`rest`, `grpc-server`, `grpc-client`, or `cron`):
 
 ```sh
-docker build --build-arg APP=rest -t go-boilerplate:rest .
+docker build --ignorefile go-boilerplate/.dockerignore -f go-boilerplate/Dockerfile --build-arg APP=rest -t go-boilerplate:rest .
 docker run --rm -p 8080:8080 go-boilerplate:rest
 ```
 
-For the gRPC client, set `GRPC_TARGET` to the reachable server address. The image defaults to the REST executable.
+Run the build command from the parent directory containing both `go-boilerplate/` and `common-lib/`; the boilerplate's local module replacement expects that sibling layout. For the gRPC client, set `GRPC_TARGET` to the reachable server address. The image defaults to the REST executable.
 
 ## gRPC API
 
