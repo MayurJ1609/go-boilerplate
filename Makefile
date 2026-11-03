@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration build build-rest build-grpc-server build-grpc-client build-cron \
+.PHONY: test test-unit test-integration coverage build build-rest build-grpc-server build-grpc-client build-cron \
 	run-rest run-grpc-server run-grpc-client run-cron infra-up infra-down
 
 test: test-unit test-integration
@@ -8,6 +8,10 @@ test-unit:
 
 test-integration:
 	go test -tags=integration ./tests/integration/...
+
+coverage:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out
 
 build: build-rest build-grpc-server build-grpc-client build-cron
 

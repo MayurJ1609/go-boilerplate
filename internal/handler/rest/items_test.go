@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -101,12 +102,126 @@ func TestCreateItemRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestItemRoutesReportStoreFailures(t *testing.T) {
+	storeErr := errors.New("database unavailable")
+	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, failingItemStore{err: storeErr}, newMemoryItemStore())
+	for _, tt := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/v1/postgres/items"},
+		{method: http.MethodGet, path: "/v1/postgres/items/id"},
+		{method: http.MethodPost, path: "/v1/postgres/items", body: `{"name":"item"}`},
+		{method: http.MethodPut, path: "/v1/postgres/items/id", body: `{"name":"item"}`},
+		{method: http.MethodDelete, path: "/v1/postgres/items/id"},
+	} {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			response := performJSONRequest(t, handler, tt.method, tt.path, tt.body)
+			if response.Code != http.StatusInternalServerError {
+				t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusInternalServerError, response.Body)
+			}
+		})
+	}
+}
+
+func TestItemRoutesRequireConfiguredStore(t *testing.T) {
+	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, nil, nil)
+	for _, tt := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/v1/postgres/items"},
+		{method: http.MethodGet, path: "/v1/postgres/items/id"},
+		{method: http.MethodPost, path: "/v1/postgres/items", body: `{"name":"item"}`},
+		{method: http.MethodPut, path: "/v1/postgres/items/id", body: `{"name":"item"}`},
+		{method: http.MethodDelete, path: "/v1/postgres/items/id"},
+	} {
+		response := performJSONRequest(t, handler, tt.method, tt.path, tt.body)
+		if response.Code != http.StatusServiceUnavailable {
+			t.Errorf("%s %s status = %d, want %d", tt.method, tt.path, response.Code, http.StatusServiceUnavailable)
+		}
+	}
+}
+
+func TestUpdateAndDeleteItemReturnNotFound(t *testing.T) {
+	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, newMemoryItemStore(), newMemoryItemStore())
+	update := performJSONRequest(t, handler, http.MethodPut, "/v1/postgres/items/missing", `{"name":"item"}`)
+	if update.Code != http.StatusNotFound {
+		t.Fatalf("update status = %d, want %d", update.Code, http.StatusNotFound)
+	}
+	remove := performJSONRequest(t, handler, http.MethodDelete, "/v1/postgres/items/missing", "")
+	if remove.Code != http.StatusNotFound {
+		t.Fatalf("delete status = %d, want %d", remove.Code, http.StatusNotFound)
+	}
+}
+
+func TestUpdateItemReportsUpdateFailure(t *testing.T) {
+	store := updateFailingItemStore{
+		memoryItemStore: newMemoryItemStore(),
+		err:             errors.New("database unavailable"),
+	}
+	store.items["item-1"] = domain.Item{ID: "item-1", Name: "old"}
+	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, store, newMemoryItemStore())
+	response := performJSONRequest(t, handler, http.MethodPut, "/v1/postgres/items/item-1", `{"name":"new"}`)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestCreateItemRejectsMalformedAndOversizedJSON(t *testing.T) {
+	handler := NewHandlerWithStores(domain.Greeter{}, nil, nil, newMemoryItemStore(), newMemoryItemStore())
+	for _, body := range []string{
+		`{"name":`,
+		`{"name":"` + strings.Repeat("x", (1<<20)+1) + `"}`,
+	} {
+		response := performJSONRequest(t, handler, http.MethodPost, "/v1/postgres/items", body)
+		if response.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", response.Code, http.StatusBadRequest)
+		}
+	}
+}
+
 func performJSONRequest(t *testing.T, handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response
+}
+
+type failingItemStore struct {
+	err error
+}
+
+type updateFailingItemStore struct {
+	*memoryItemStore
+	err error
+}
+
+func (s updateFailingItemStore) Update(context.Context, domain.Item) (domain.Item, error) {
+	return domain.Item{}, s.err
+}
+
+func (s failingItemStore) List(context.Context) ([]domain.Item, error) {
+	return nil, s.err
+}
+
+func (s failingItemStore) Get(context.Context, string) (domain.Item, error) {
+	return domain.Item{}, s.err
+}
+
+func (s failingItemStore) Create(context.Context, domain.Item) (domain.Item, error) {
+	return domain.Item{}, s.err
+}
+
+func (s failingItemStore) Update(context.Context, domain.Item) (domain.Item, error) {
+	return domain.Item{}, s.err
+}
+
+func (s failingItemStore) Delete(context.Context, string) error {
+	return s.err
 }
 
 type memoryItemStore struct {

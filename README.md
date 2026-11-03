@@ -128,6 +128,7 @@ For an authenticated MongoDB server, set both `MONGODB_USERNAME` and `MONGODB_PA
 go test ./...                         # unit tests
 go test -tags=integration ./tests/integration/...
 make test                             # both test suites
+make coverage                         # unit-test coverage summary (coverage.out)
 make build                            # build all entrypoints into bin/
 make build-rest                       # build only REST into bin/rest
 make build-grpc-server                # build only gRPC server into bin/grpc-server

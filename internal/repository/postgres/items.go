@@ -7,14 +7,20 @@ import (
 
 	"github.com/example/go-boilerplate/internal/domain"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-type Items struct {
-	pool *pgxpool.Pool
+type queryer interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }
 
-func NewItems(pool *pgxpool.Pool) *Items {
+type Items struct {
+	pool queryer
+}
+
+func NewItems(pool queryer) *Items {
 	return &Items{pool: pool}
 }
 
